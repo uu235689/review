@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>新生任務｜Campus Quest</title>
+<style>
+:root{color-scheme:dark;--ink:#fff7e2;--muted:#b9b2c7;--gold:#ffd27d;--green:#9be5be;--panel:#201b35;--line:#49415f}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 80% 0%,#382753,transparent 55%),#131022;color:var(--ink);font:16px/1.6 system-ui,sans-serif}
+main{max-width:980px;margin:auto;padding:32px 20px 52px}header{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding-bottom:16px}.brand{color:var(--gold);font:bold 15px monospace;letter-spacing:.12em}h1{font-size:clamp(38px,8vw,76px);line-height:1.08;margin:38px 0 12px;letter-spacing:-.04em}h2{margin:0 0 8px;font-size:clamp(24px,5vw,36px);line-height:1.25}p{margin:0 0 14px}.muted{color:var(--muted)}.layout{display:grid;grid-template-columns:240px 1fr;gap:18px;margin-top:26px}.map,.scene{background:var(--panel);border:1px solid var(--line);border-radius:16px}.map{padding:15px;height:fit-content}.map h2{font-size:17px}.scene{padding:clamp(18px,4vw,32px);min-height:400px;box-shadow:0 12px 0 #0e0b1b}.scene .icon{font-size:42px;margin-bottom:10px}.map-item{display:flex;gap:10px;padding:10px 7px;border-bottom:1px solid var(--line)}.map-item:last-child{border:0}.active{color:var(--gold);font-weight:bold}.cleared{color:var(--green)}.prompt{font-size:clamp(20px,4vw,29px);margin:16px 0;line-height:1.45}.options{display:grid;grid-template-columns:repeat(auto-fit,minmax(128px,1fr));gap:9px}button{font:inherit;border:1px solid var(--line);border-radius:9px;background:#302647;color:var(--ink);padding:10px 13px;cursor:pointer;text-align:left}button:hover:not(:disabled){border-color:var(--gold)}button:focus-visible,summary:focus-visible{outline:3px solid var(--gold);outline-offset:3px}button:disabled{cursor:default}.primary{background:var(--gold);color:#291c19;border-color:var(--gold);font-weight:bold}.correct{border-color:var(--green);color:var(--green)}.wrong{border-color:#fda49f;color:#ffc2bc}.feedback{min-height:30px;margin:14px 0 6px}.meter{width:100%;height:7px;accent-color:var(--gold);margin-top:20px}.meta{font: bold 13px/1.5 monospace;color:var(--gold);letter-spacing:.06em}details{margin-top:24px;color:var(--muted)}summary{cursor:pointer;color:var(--gold)}details p{margin:6px 0}.story{background:#18142a;border-left:3px solid var(--gold);padding:12px 15px;margin:18px 0;font-size:18px}.pill{color:var(--green);font-size:14px}@media(max-width:640px){.layout{grid-template-columns:1fr}.map{display:flex;flex-wrap:wrap;gap:5px}.map h2{width:100%;margin:0}.map-item{border:0;padding:4px 6px;font-size:13px}.scene{min-height:0}header button{padding:5px 9px}}
+</style>
+</head>
+<body><main>
+<header><span class="brand">CAMPUS QUEST</span><button id="reset" type="button" hidden>重新開始</button></header>
+<h1>新生任務</h1>
+<p class="muted">你的校園通行證少了三枚印章。走過校門、體育館和教室，把它們找回來。</p>
+<div class="layout">
+<nav class="map" aria-label="任務地圖"><h2>任務地圖</h2><div id="map" style="display:contents"></div></nav>
+<section class="scene" id="scene" aria-label="目前任務"></section>
+</div>
+</main>
+<script>
+'use strict';
+const stages = [
+  {name:'校門口', icon:'🏫', intro:'警衛想知道你看不看得懂校園裡的字。', questions:[
+    ['freshman','一年級新生','體育館','教練','I am a freshman. 我是一年級新生。'],
+    ['welcome','歡迎','完成','休息','Welcome to our school! 歡迎來到我們學校！'],
+    ['excellent','很棒的','可怕的','很糟糕的','excellent = very good，很棒的。'],
+    ['terrible','很糟糕的','很棒的','很有趣的','terrible = very bad，很糟糕的。'],
+    ['scary','可怕的','很棒的','好吃的','a scary movie 一部恐怖電影。']
+  ]},
+  {name:'體育館', icon:'🏀', intro:'教練把任務寫在白板上了。把缺掉的字補回去。', questions:[
+    ['We play basketball in the ___.','gym','coach','break','in the gym 在體育館裡。'],
+    ['We run on the sports ___.','field','break','coach','sports field 運動場。'],
+    ['Our basketball ___ helps us play better.','coach','field','gym','basketball coach 籃球教練。'],
+    ['After basketball, we take a ___.','break','coach','field','take a break 休息一下。'],
+    ['At home, I ___ my homework.','finish','gym','break','finish my homework 完成我的作業。']
+  ]},
+  {name:'教室', icon:'🔑', intro:'教室的電子鎖需要三個字：am、is、are。看主詞選出正確的 be 動詞。', questions:[
+    ['I ___ a freshman.','am','is','are','I → am。'],
+    ['You ___ in the gym.','are','am','is','you → are。'],
+    ['She ___ an excellent coach.','is','am','are','she → is。'],
+    ['We ___ on the sports field.','are','is','am','we → are。'],
+    ['The movie ___ scary.','is','are','am','the movie 是一部電影，相當於 it → is。'],
+    ['Ben and Mia ___ freshmen.','are','is','am','Ben and Mia 是兩個人，相當於 they → are。']
+  ]}
+];
+const scene = document.querySelector('#scene');
+const map = document.querySelector('#map');
+const reset = document.querySelector('#reset');
+let stage = 0, index = 0, cleared = 0, started = false;
+const total = stages.reduce((sum, item) => sum + item.questions.length, 0);
+function shuffled(items) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+function renderMap() {
+  map.innerHTML = stages.map((item,i) => {
+    const state = i < stage ? 'cleared' : i === stage ? 'active' : '';
+    const status = i < stage ? '已通過' : i === stage ? '目前關卡' : '未解鎖';
+    return '<div class="map-item '+state+'"><span aria-hidden="true">'+item.icon+'</span><span>'+item.name+' · '+status+'</span></div>';
+  }).join('');
+}
+function showIntro() {
+  renderMap();
+  scene.innerHTML = '<div class="icon" aria-hidden="true">🎒</div><h2>拿回校園通行證</h2><p>用上次學的 10 個單字和 be 動詞闖關。答錯有提示，可以再試。</p><button class="primary" id="start">開始任務 →</button>';
+  document.querySelector('#start').onclick = () => {
+    started = true;
+    reset.hidden = false;
+    showQuestion();
+  };
+}
+function showQuestion() {
+  renderMap();
+  const current = stages[stage];
+  const [prompt, answer, ...rest] = current.questions[index];
+  const [wrongA, wrongB, hint] = rest;
+  const choices = stage === 2 ? ['am','is','are'] : shuffled([answer,wrongA,wrongB]);
+  scene.innerHTML = '<div class="meta">關卡 '+(stage+1)+' / '+stages.length+'　·　第 '+(index+1)+' / '+current.questions.length+' 題</div><div class="icon" aria-hidden="true">'+current.icon+'</div><h2 tabindex="-1">'+current.name+'</h2><p class="muted">'+current.intro+'</p><p class="prompt" lang="en">'+prompt+'</p><div class="options"></div><p class="feedback" role="status"></p><button class="primary" id="next" hidden>下一題 →</button><progress class="meter" max="'+total+'" value="'+cleared+'" aria-label="答對進度"></progress>'+(stage===2 ? '<details><summary>查看 be 動詞提示</summary><p>I → <b>am</b><br>he / she / it、單數 → <b>is</b><br>you / we / they、複數 → <b>are</b></p></details>' : '');
+  let missed = false;
+  const options = scene.querySelector('.options');
+  const feedback = scene.querySelector('.feedback');
+  const next = scene.querySelector('#next');
+  for (const choice of choices) {
+    const button = document.createElement('button');
+    button.textContent = choice;
+    button.lang = stage === 0 ? 'zh-Hant' : 'en';
+    options.append(button);
+    button.onclick = () => {
+      if (choice !== answer) {
+        if (!missed) { firstMissCount++; missed = true; }
+        button.classList.add('wrong');
+        feedback.textContent = '再試一次。提示｜' + hint;
+        button.disabled = true;
+        options.querySelector('button:not(:disabled)').focus();
+        return;
+      }
+      cleared++;
+      button.classList.add('correct');
+      options.querySelectorAll('button').forEach(item => { item.disabled = true; });
+      feedback.textContent = '答對了！' + hint;
+      scene.querySelector('progress').value = cleared;
+      next.hidden = false;
+      if (index === current.questions.length - 1) {
+        next.textContent = stage === stages.length - 1 ? '領取通行證 →' : '領取印章並前往下一站 →';
+      }
+      next.focus();
+    };
+  }
+  next.onclick = () => {
+    index++;
+    if (index === current.questions.length) { stage++; index = 0; }
+    if (stage === stages.length) showFinish(); else showQuestion();
+  };
+  scene.querySelector('h2').focus();
+}
+function showFinish() {
+  renderMap();
+  scene.innerHTML = '<div class="pill">✓ 三枚印章已集齊</div><div class="icon" aria-hidden="true">🏅</div><h2 tabindex="-1">校園通行證到手！</h2><p>已完成 '+cleared+' 題，首次就答對 '+(cleared - firstMissCount)+' 題。</p><h3>最後一步｜找老師口說驗收</h3><p>看著下面的短文，用中文說說 Mia 是誰、她和朋友在哪裡做什麼。可以看文章。</p><div class="story" lang="en">Hi, I am Mia. I am a freshman. My coach is excellent. My friends and I are in the gym. We play basketball and then take a break.</div>';
+  scene.querySelector('h2').focus();
+}
+let firstMissCount = 0;
+reset.onclick = () => {
+  if (started && stage < stages.length && !confirm('要清除目前的進度並重新開始嗎？')) return;
+  stage = 0; index = 0; cleared = 0; firstMissCount = 0; started = false;
+  reset.hidden = true;
+  showIntro();
+};
+showIntro();
+</script></body></html>
